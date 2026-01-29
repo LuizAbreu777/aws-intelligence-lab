@@ -1,6 +1,7 @@
 import express from "express";
 import { DetectSentimentCommand, DetectEntitiesCommand } from "@aws-sdk/client-comprehend";
 import { getComprehendClient } from "../aws/comprehendClient.js";
+import { mockEntities, mockSentiment } from "../mocks/awsMocks.js";
 import { requireText, requireLanguageCode } from "../utils/validate.js";
 
 export const comprehendRoutes = express.Router();
@@ -10,6 +11,10 @@ comprehendRoutes.post("/sentiment", async (req, res, next) => {
     const { text, languageCode } = req.body;
     requireText(text);
     const lang = requireLanguageCode(languageCode);
+
+    if (process.env.MOCK_AWS === "true") {
+      return res.json(mockSentiment());
+    }
 
     const client = getComprehendClient();
     const result = await client.send(
@@ -27,6 +32,10 @@ comprehendRoutes.post("/entities", async (req, res, next) => {
     const { text, languageCode } = req.body;
     requireText(text);
     const lang = requireLanguageCode(languageCode);
+
+    if (process.env.MOCK_AWS === "true") {
+      return res.json(mockEntities());
+    }
 
     const client = getComprehendClient();
     const result = await client.send(
