@@ -7,6 +7,7 @@ import {
 } from "@aws-sdk/client-textract";
 
 import { getTextractClient } from "../aws/textractClient.js";
+import { mockAnalyze, mockOcr, mockPdfStart, mockPdfStatus } from "../mocks/awsMocks.js";
 import { uploadImage } from "../utils/fileUpload.js";
 import { requireS3Key } from "../utils/validate.js";
 
@@ -16,6 +17,10 @@ textractRoutes.post("/ocr", uploadImage.single("file"), async (req, res, next) =
   try {
     if (!req.file?.buffer) {
       return res.status(400).json({ ok: false, error: "Arquivo 'file' é obrigatório (JPG/PNG)." });
+    }
+
+    if (process.env.MOCK_AWS === "true") {
+      return res.json(mockOcr());
     }
 
     const client = getTextractClient();
@@ -45,6 +50,10 @@ textractRoutes.post("/analyze", uploadImage.single("file"), async (req, res, nex
       return res.status(400).json({ ok: false, error: "Arquivo 'file' é obrigatório (JPG/PNG)." });
     }
 
+    if (process.env.MOCK_AWS === "true") {
+      return res.json(mockAnalyze());
+    }
+
     const client = getTextractClient();
     const result = await client.send(
       new AnalyzeDocumentCommand({
@@ -70,6 +79,10 @@ textractRoutes.post("/pdf/start", async (req, res, next) => {
     const { s3Key } = req.body;
     requireS3Key(s3Key);
 
+    if (process.env.MOCK_AWS === "true") {
+      return res.json(mockPdfStart());
+    }
+
     const client = getTextractClient();
     const result = await client.send(
       new StartDocumentAnalysisCommand({
@@ -92,6 +105,11 @@ textractRoutes.post("/pdf/start", async (req, res, next) => {
 textractRoutes.get("/pdf/status/:jobId", async (req, res, next) => {
   try {
     const { jobId } = req.params;
+
+    if (process.env.MOCK_AWS === "true") {
+      return res.json(mockPdfStatus(jobId));
+    }
+
     const client = getTextractClient();
 
     const result = await client.send(
