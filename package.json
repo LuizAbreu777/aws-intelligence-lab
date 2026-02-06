@@ -1,0 +1,17 @@
+{
+  "name": "aws-intelligence-lab",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "install:all": "npm install --prefix aws-backend && npm install --prefix aws-frontend",
+    "dev": "npm run dev:backend && npm run dev:frontend",
+    "dev:backend": "npm run dev --prefix aws-backend",
+    "dev:frontend": "npm run dev --prefix aws-frontend",
+    "start": "npm run start:backend",
+    "start:backend": "npm run start --prefix aws-backend",
+    "build": "npm run build --prefix aws-frontend",
+    "preview": "npm run preview --prefix aws-frontend",
+    "lint": "npm run lint --prefix aws-frontend"
+  }
+}
