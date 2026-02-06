@@ -1,7 +1,6 @@
 {
-  "name": "aws-intelligence-lab",
+  "name": "aws-backend",
   "version": "1.0.0",
-  "description": "Demo com Amazon Comprehend (NLP) e Amazon Textract (OCR/Document AI) usando Node.js",
   "main": "src/server.js",
   "type": "module",
   "scripts": {
