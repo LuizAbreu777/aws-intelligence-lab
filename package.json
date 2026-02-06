@@ -4,14 +4,14 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "install:all": "npm install --prefix aws-backend && npm install --prefix aws-frontend",
+    "install:all": "npm install --prefix backend && npm install --prefix frontend",
     "dev": "npm run dev:backend && npm run dev:frontend",
-    "dev:backend": "npm run dev --prefix aws-backend",
-    "dev:frontend": "npm run dev --prefix aws-frontend",
+    "dev:backend": "npm run dev --prefix backend",
+    "dev:frontend": "npm run dev --prefix frontend",
     "start": "npm run start:backend",
-    "start:backend": "npm run start --prefix aws-backend",
-    "build": "npm run build --prefix aws-frontend",
-    "preview": "npm run preview --prefix aws-frontend",
-    "lint": "npm run lint --prefix aws-frontend"
+    "start:backend": "npm run start --prefix backend",
+    "build": "npm run build --prefix frontend",
+    "preview": "npm run preview --prefix frontend",
+    "lint": "npm run lint --prefix frontend"
   }
 }
