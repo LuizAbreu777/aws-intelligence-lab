@@ -1,16 +1,15 @@
-# AWS Intelligence Lab - Tier 4 Distributed Pipeline 🚀
+# 🚀 AWS Intelligence Lab - Tier 4 Distributed Pipeline
 
-Aplicacao distribuida com processamento assíncrono em estagios (`ingest -> ocr -> nlp`) usando:
+Aplicação distribuída com processamento assíncrono em estágios (`ingest -> ocr -> nlp`) usando:
 
 - Frontend React (cliente)
 - API Gateway Node.js/Express (orquestrador)
 - RabbitMQ (message broker)
 - Workers dedicados por responsabilidade
 - PostgreSQL (estado e resultados)
-- Integracao AWS (Textract e Comprehend) com modo mock para desenvolvimento
+- Integração AWS (Textract e Comprehend) com modo mock para desenvolvimento
 
-## Estrutura do Projeto 🗂️
-
+## 🗂️ Estrutura do Projeto
 ```text
 aws-intelligence-lab/
 ├─ backend/
@@ -41,8 +40,7 @@ aws-intelligence-lab/
 └─ README.md
 ```
 
-## Arquitetura do Sistema 🧭
-
+## 🧭 Arquitetura do Sistema
 ```text
 [Frontend React]
       |
@@ -63,22 +61,22 @@ aws-intelligence-lab/
 ```
 
 Notas:
-- O frontend nao acessa AWS diretamente.
-- A API orquestra jobs e expoe status.
+- O frontend não acessa AWS diretamente.
+- A API orquestra jobs e expõe status.
 - Workers processam por etapa e atualizam o banco.
 - RabbitMQ desacopla processamento e permite escala horizontal.
 
-## 1. Arquitetura 🏗️
+## 🏗️ 1. Arquitetura
 
-### Servicos
+### Serviços
 
 - `frontend`: UI React que inicia jobs e consulta status via polling HTTP.
-- `api-gateway`: cria job no banco, publica mensagem na fila `jobs.ingest`, expõe endpoints de status e metricas.
+- `api-gateway`: cria job no banco, publica mensagem na fila `jobs.ingest`, expõe endpoints de status e métricas.
 - `rabbitmq`: broker AMQP com filas por etapa e DLQ.
 - `worker-ingest`: valida payload, marca progresso inicial, encaminha para OCR.
 - `worker-ocr`: executa OCR (Textract async, com polling interno/backoff), salva texto e encaminha para NLP.
 - `worker-nlp`: executa NLP (Comprehend), salva resultado final e conclui job.
-- `postgres`: persistencia de jobs, status, progresso, erros e resultados.
+- `postgres`: persistência de jobs, status, progresso, erros e resultados.
 
 ### Fluxo de processamento
 
@@ -87,7 +85,7 @@ Notas:
 3. `worker-ingest` valida e atualiza (`processing`, `progress=10`), publica em `jobs.ocr`.
 4. `worker-ocr` processa OCR, salva `result.ocrText` e `result.ocr`, atualiza (`stage=ocr`, `progress=60`), publica em `jobs.nlp`.
 5. `worker-nlp` processa sentimento/entidades, salva `result.nlp`, finaliza (`done`, `stage=completed`, `progress=100`), publica em `jobs.completed`.
-6. Front consulta `GET /jobs/:id` ate terminar.
+6. Front consulta `GET /jobs/:id` até terminar.
 
 ### Contrato de dados (jobs)
 
@@ -97,10 +95,10 @@ Notas:
 - `attempt_count`: tentativas de retry para rastreio
 - `payload`: entrada original
 - `meta`: metadados de pipeline (ex.: `s3Key`, `languageCode`, `textractJobId`)
-- `result`: saida agregada por etapa (`ocrText`, `ocr`, `nlp`)
+- `result`: saída agregada por etapa (`ocrText`, `ocr`, `nlp`)
 - `error_message`: erro final quando falha
 
-## 2. Confiabilidade e tolerancia a falhas 🛡️
+## 🛡️ 2. Confiabilidade e tolerância a falhas
 
 - Ack somente em sucesso.
 - Em erro transitório: `nack(requeue=true)` + incremento de `attempt_count`.
@@ -110,127 +108,111 @@ Notas:
   - `jobs.ingest.dlq`
   - `jobs.ocr.dlq`
   - `jobs.nlp.dlq`
-- Correlacao ponta a ponta com `correlationId=jobId` em logs e mensagens AMQP.
+- Correlação ponta a ponta com `correlationId=jobId` em logs e mensagens AMQP.
 
-## 3. Escalabilidade 📈
+## 📈 3. Escalabilidade
 
 Escala horizontal por worker (consumer group AMQP):
-
 ```bash
 docker compose up -d --scale worker-ingest=2 --scale worker-ocr=3 --scale worker-nlp=3
 ```
 
-RabbitMQ distribui mensagens entre replicas da mesma fila. A API continua stateless para escrita/leitura do estado no Postgres.
+RabbitMQ distribui mensagens entre réplicas da mesma fila. A API continua stateless para escrita/leitura do estado no Postgres.
 
-## 4. Setup e execucao ⚙️
+## ⚙️ 4. Setup e execução
 
-## Requisitos 📦
+## 📦 Requisitos
 
 - Docker + Docker Compose
 
-## Quick Start (Beginner Friendly) 👣
+## 👣 Quick Start (Iniciante Amigável)
 
-Follow these steps exactly, in order.
+Siga esses passos exatamente, nessa ordem.
 
-1. Install Docker Desktop
-- Download and install: https://www.docker.com/products/docker-desktop/
-- Open Docker Desktop and wait until it shows it is running.
+1. Instale o Docker Desktop
+- Download e instalação: https://www.docker.com/products/docker-desktop/
+- Abra o Docker Desktop e aguarde até mostrar que está rodando.
 
-2. Open a terminal in the project folder
-- Example project path: `aws-intelligence-lab`
+2. Abra um terminal na pasta do projeto
+- Exemplo de caminho do projeto: `aws-intelligence-lab`
 
-3. Create or update the root `.env` file
-- File location: same folder as `docker-compose.yml`
-- Minimal content:
-
+3. Crie ou atualize o arquivo `.env` raiz
+- Localização do arquivo: mesma pasta do `docker-compose.yml`
+- Conteúdo mínimo:
 ```env
 AWS_REGION=us-east-1
 MOCK_AWS=false
 TEXTRACT_S3_BUCKET=aws-intelligence-lab-pdf
 ```
-
-If you just want to test without spending money, use:
-
+Se você só quer testar sem gastar dinheiro, use:
 ```env
 MOCK_AWS=true
 AWS_REGION=us-east-1
 TEXTRACT_S3_BUCKET=aws-intelligence-lab-pdf
 ```
 
-4. Start all services
-
+4. Inicie todos os serviços
 ```bash
 docker compose up -d --build
 ```
 
-5. Check if everything is healthy
-
+5. Verifique se está tudo saudável
 ```bash
 docker compose ps
 ```
+Esperado: `api-gateway`, `rabbitmq`, e workers devem estar `Up` e eventualmente `healthy` ✅
 
-Expected: `api-gateway`, `rabbitmq`, and workers should be `Up` and eventually `healthy` ✅
+6. Abra a aplicação
+- Frontend (se rodando separadamente): geralmente `http://localhost:5173`
+- Health da API: `http://localhost:3000/health`
 
-6. Open the application
-- Frontend (if running separately): usually `http://localhost:5173`
-- API health: `http://localhost:3000/health`
-
-7. First functional test (API)
-
+7. Primeiro teste funcional (API)
 ```bash
 curl -s -X POST http://localhost:3000/jobs \
   -H "Content-Type: application/json" \
   -d '{"type":"text","payload":{"text":"Hello from first run","languageCode":"en"}}'
 ```
-
-Copy the returned `jobId`, then check status:
-
+Copie o `jobId` retornado, depois verifique o status:
 ```bash
 curl -s http://localhost:3000/jobs/<JOB_ID>
 ```
 
-8. Stop everything when finished
-
+8. Pare tudo quando terminar
 ```bash
 docker compose down
 ```
-
-If you need a full reset (including database volume):
-
+Se você precisar de um reset completo (incluindo volume do database):
 ```bash
 docker compose down -v
 ```
 
-## Variaveis principais 🔐
+## 🔐 Variáveis principais
 
 - `MOCK_AWS=true` (default no compose): roda sem chamar AWS real.
 - `MOCK_AWS=false`: habilita AWS real.
 - `AWS_REGION` (default `us-east-1`)
-- `TEXTRACT_S3_BUCKET` (obrigatorio para OCR real em PDF S3)
+- `TEXTRACT_S3_BUCKET` (obrigatório para OCR real em PDF S3)
 - Credenciais AWS no ambiente quando `MOCK_AWS=false`.
 
 ## Subir stack
-
 ```bash
 docker compose up -d --build
 ```
 
-## Validar saude
-
+## Validar saúde
 ```bash
 docker compose ps
 curl -s http://localhost:3000/health
 ```
 
-## 5. Endpoints principais 🌐
+## 🌐 5. Endpoints principais
 
 - `POST /jobs` cria job da pipeline
 - `GET /jobs/:id` consulta status/progresso/resultado
 - `GET /jobs/stats` dashboard simples (agregado por `status` + `stage`)
 - `POST /comprehend/*` e `POST /textract/*` permanecem para debug/manual
 
-## Exemplo de criacao de job (texto)
-
+## Exemplo de criação de job (texto)
 ```bash
 curl -s -X POST http://localhost:3000/jobs \
   -H "Content-Type: application/json" \
@@ -240,8 +222,7 @@ curl -s -X POST http://localhost:3000/jobs \
   }'
 ```
 
-## Exemplo de criacao de job (PDF via S3)
-
+## Exemplo de criação de job (PDF via S3)
 ```bash
 curl -s -X POST http://localhost:3000/jobs \
   -H "Content-Type: application/json" \
@@ -252,70 +233,49 @@ curl -s -X POST http://localhost:3000/jobs \
 ```
 
 ## Polling de status
-
 ```bash
 curl -s http://localhost:3000/jobs/<JOB_ID>
 ```
 
 ## Dashboard simples
-
 ```bash
 curl -s http://localhost:3000/jobs/stats
 ```
 
-## 6. Teste ponta a ponta (checklist) 🧪
+## 🧪 6. Teste ponta a ponta (checklist)
 
 1. Suba a stack: `docker compose up -d --build`.
 2. Crie um job com `s3Key` ou `text`.
-3. Consulte `GET /jobs/:id` ate finalizar.
-4. Verifique transicao de estado:
+3. Consulte `GET /jobs/:id` até finalizar.
+4. Verifique transição de estado:
    - `queued -> processing -> done` (ou `failed`)
-   - estagios: `ingest -> ocr -> nlp -> completed`
+   - estágios: `ingest -> ocr -> nlp -> completed`
 5. Confira resultado final em `job.result` e progresso `100`.
 6. Confira agregados em `GET /jobs/stats`.
 
-## 7. Operação e troubleshooting 🧰
+## 🧰 7. Operação e troubleshooting
 
 - Logs:
-
 ```bash
 docker compose logs -f api-gateway worker-ingest worker-ocr worker-nlp
 ```
 
 - Filas e DLQ no Rabbit:
-
 ```bash
 docker exec -it aws-intelligence-lab-rabbitmq-1 rabbitmqctl list_queues name messages
 ```
 
 - Recriar stack limpa (inclui filas e banco):
-
 ```bash
 docker compose down -v
 docker compose up -d --build
 ```
 
-## 8. Observacoes de design (Tier 4) 🧠
+## 🧠 8. Observações de design (Tier 4)
 
-- Sistema distribuido com multiplos servicos independentes.
-- Comunicacao mista HTTP + AMQP.
+- Sistema distribuído com múltiplos serviços independentes.
+- Comunicação mista HTTP + AMQP.
 - Pipeline assíncrona com workers especializados.
-- Estado centralizado e consultavel em banco.
-- Mecanismos de resiliencia (retry, DLQ, correlation).
-- Escalabilidade horizontal por replicas de workers.
-
-## 9. Recommended Technical Improvements (No Functional Changes) 📌
-
-The items below are optimization and maintainability improvements that do not change business behavior.
-
-1. Fix root `dev` script to run frontend and backend in parallel.
-2. Keep README and runtime defaults aligned (especially `MOCK_AWS` default) to avoid accidental AWS costs.
-3. Avoid infrastructure drift by keeping a single source of truth for Compose files.
-4. Extract queue and DLQ names to one shared contract module (API and workers currently duplicate values).
-5. Add graceful shutdown hooks (`SIGINT`/`SIGTERM`) to close Postgres pools and AMQP channels cleanly.
-6. Reuse singleton AWS SDK clients instead of creating clients per request in backend routes.
-7. Improve health strategy by separating liveness/readiness and including broker readiness checks.
-8. Add centralized startup configuration validation (required env vars, mode constraints, bucket checks).
-9. Refactor large frontend file into smaller components/hooks for easier maintenance.
-10. Harmonize dependency versions across backend/worker (AWS SDK and `pg`) to reduce environment variance.
-11. Add automated smoke/integration tests for the staged job pipeline (`POST /jobs` -> `GET /jobs/:id`).
+- Estado centralizado e consultável em banco.
+- Mecanismos de resiliência (retry, DLQ, correlation).
+- Escalabilidade horizontal por réplicas de workers.
