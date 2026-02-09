@@ -24,6 +24,9 @@ const getBaseUrl = () => {
 };
 
 const API_BASE_URL = getBaseUrl();
+const POLL_BACKOFF_MS = [3000, 6000, 10000, 15000];
+const POLL_TIMEOUT_MS = 5 * 60 * 1000;
+const AWS_CHECK_COOLDOWN_MS = 30 * 1000;
 
 export default function App() {
   // Estado de UI
@@ -38,8 +41,14 @@ export default function App() {
   // Estados para PDF Assíncrono
   const [s3Key, setS3Key] = useState('docs/exemplo.pdf');
   const [jobId, setJobId] = useState('');
+  const [jobStage, setJobStage] = useState('');
+  const [jobProgress, setJobProgress] = useState(0);
   const [isPolling, setIsPolling] = useState(false);
   const pollInterval = useRef(null);
+  const isPollingRef = useRef(false);
+  const pollStartAtRef = useRef(null);
+  const pollAttemptRef = useRef(0);
+  const pollRequestInFlightRef = useRef(false);
 
   // Estados de Requisição
   const [loading, setLoading] = useState(false);
@@ -47,11 +56,15 @@ export default function App() {
   const [error, setError] = useState(null);
   const [healthStatus, setHealthStatus] = useState(null); 
   const [awsHealth, setAwsHealth] = useState(null); // Novo: Status da AWS
+  const [awsCooldownLeft, setAwsCooldownLeft] = useState(0);
+  const awsLastCheckAtRef = useRef(0);
+  const awsCooldownTimerRef = useRef(null);
 
   // Limpeza de recursos
   useEffect(() => {
     return () => {
-      if (pollInterval.current) clearInterval(pollInterval.current);
+      if (pollInterval.current) clearTimeout(pollInterval.current);
+      if (awsCooldownTimerRef.current) clearInterval(awsCooldownTimerRef.current);
       if (filePreview) URL.revokeObjectURL(filePreview);
     };
   }, []);
@@ -67,6 +80,8 @@ export default function App() {
     setSelectedFile(null);
     setFilePreview(null);
     setJobId('');
+    setJobStage('');
+    setJobProgress(0);
     stopPolling();
   };
 
@@ -88,6 +103,27 @@ export default function App() {
 
   // Função para testar conectividade AWS (Novo)
   const checkAwsConnectivity = async () => {
+    const now = Date.now();
+    const elapsed = now - awsLastCheckAtRef.current;
+    if (elapsed < AWS_CHECK_COOLDOWN_MS) {
+      setAwsCooldownLeft(Math.ceil((AWS_CHECK_COOLDOWN_MS - elapsed) / 1000));
+      return;
+    }
+
+    awsLastCheckAtRef.current = now;
+    setAwsCooldownLeft(Math.ceil(AWS_CHECK_COOLDOWN_MS / 1000));
+    if (awsCooldownTimerRef.current) clearInterval(awsCooldownTimerRef.current);
+    awsCooldownTimerRef.current = setInterval(() => {
+      const remaining = Math.ceil((AWS_CHECK_COOLDOWN_MS - (Date.now() - awsLastCheckAtRef.current)) / 1000);
+      if (remaining <= 0) {
+        clearInterval(awsCooldownTimerRef.current);
+        awsCooldownTimerRef.current = null;
+        setAwsCooldownLeft(0);
+        return;
+      }
+      setAwsCooldownLeft(remaining);
+    }, 1000);
+
     setAwsHealth('CHECKING');
     // Usamos uma chamada leve ao Comprehend para validar credenciais
     try {
@@ -176,10 +212,16 @@ export default function App() {
 
   const startPdfJob = async (e) => {
     e.preventDefault();
+    stopPolling();
     try {
-      const data = await callApi('/textract/pdf/start', 'POST', { s3Key });
+      const data = await callApi('/jobs', 'POST', {
+        type: activeTab === 'pdf' ? 'pdf' : 'text',
+        payload: { s3Key, languageCode: language }
+      });
       if (data.jobId) {
         setJobId(data.jobId);
+        setJobStage(data.stage || 'ingest');
+        setJobProgress(data.progress || 0);
       }
     } catch (e) {
       // Erro já tratado no callApi
@@ -188,27 +230,62 @@ export default function App() {
 
   const checkPdfStatus = async () => {
     if (!jobId) return;
+    if (pollRequestInFlightRef.current) return;
+
+    if (
+      isPollingRef.current &&
+      pollStartAtRef.current &&
+      Date.now() - pollStartAtRef.current >= POLL_TIMEOUT_MS
+    ) {
+      setError('Polling interrompido após 5 minutos. Verifique o status manualmente.');
+      stopPolling();
+      return;
+    }
+
+    pollRequestInFlightRef.current = true;
     try {
-      const data = await callApi(`/textract/pdf/status/${jobId}`, 'GET');
-      
-      if (data.status === 'SUCCEEDED' || data.status === 'FAILED') {
+      const data = await callApi(`/jobs/${jobId}`, 'GET');
+      const job = data?.job;
+      if (!job) throw new Error('Job não encontrado');
+
+      setJobStage(job.stage || '');
+      setJobProgress(Number(job.progress || 0));
+
+      if (job.status === 'done' || job.status === 'failed') {
         stopPolling();
+        return;
+      }
+
+      if (isPollingRef.current) {
+        const idx = Math.min(pollAttemptRef.current, POLL_BACKOFF_MS.length - 1);
+        const delay = POLL_BACKOFF_MS[idx];
+        pollAttemptRef.current += 1;
+        pollInterval.current = setTimeout(checkPdfStatus, delay);
       }
     } catch (e) {
       stopPolling();
+    } finally {
+      pollRequestInFlightRef.current = false;
     }
   };
 
   const startPolling = () => {
-    if (!jobId) return;
+    if (!jobId || isPollingRef.current) return;
+    if (pollInterval.current) clearTimeout(pollInterval.current);
+    pollAttemptRef.current = 0;
+    pollStartAtRef.current = Date.now();
+    isPollingRef.current = true;
     setIsPolling(true);
     checkPdfStatus();
-    pollInterval.current = setInterval(checkPdfStatus, 3000);
   };
 
   const stopPolling = () => {
+    isPollingRef.current = false;
     setIsPolling(false);
-    if (pollInterval.current) clearInterval(pollInterval.current);
+    if (pollInterval.current) clearTimeout(pollInterval.current);
+    pollInterval.current = null;
+    pollStartAtRef.current = null;
+    pollAttemptRef.current = 0;
   };
 
   // --- RENDERIZAÇÃO ---
@@ -244,13 +321,15 @@ export default function App() {
             {/* Novo Botão de Status AWS */}
             <button 
               onClick={checkAwsConnectivity}
+              disabled={awsHealth === 'CHECKING' || awsCooldownLeft > 0}
               className={`flex items-center gap-2 text-xs font-mono px-3 py-1.5 rounded-full border transition-all
                 ${awsHealth === 'OK' ? 'bg-orange-50 border-orange-200 text-orange-700' : 
                   awsHealth === 'ERROR' ? 'bg-red-50 border-red-200 text-red-700' : 
                   awsHealth === 'CHECKING' ? 'bg-orange-50 border-orange-200 text-orange-600' :
                   'bg-slate-100 border-slate-200 text-slate-500 hover:bg-orange-50 hover:text-orange-600 hover:border-orange-200'}
+                ${(awsHealth === 'CHECKING' || awsCooldownLeft > 0) ? 'opacity-70 cursor-not-allowed' : ''}
               `}
-              title="Testar Credenciais AWS"
+              title={awsCooldownLeft > 0 ? `Aguarde ${awsCooldownLeft}s para testar novamente` : "Testar Credenciais AWS"}
             >
               <CloudLightning size={14} className={awsHealth === 'CHECKING' ? 'animate-pulse' : ''} />
               <span className="hidden sm:inline">AWS:</span>
@@ -259,6 +338,9 @@ export default function App() {
                  awsHealth === 'ERROR' ? 'FALHA' : 
                  awsHealth === 'CHECKING' ? 'TESTANDO...' : 'TESTAR'}
               </span>
+              {awsCooldownLeft > 0 && awsHealth !== 'CHECKING' && (
+                <span className="hidden sm:inline">({awsCooldownLeft}s)</span>
+              )}
             </button>
           </div>
         </div>
@@ -313,7 +395,7 @@ export default function App() {
                 {activeTab === 'sentiment' && 'Detecta emoções positivas, negativas ou neutras.'}
                 {activeTab === 'entities' && 'Identifica pessoas, marcas, locais e datas.'}
                 {activeTab === 'textract' && 'Extrai texto impresso ou manuscrito de imagens.'}
-                {activeTab === 'pdf' && 'Processamento assíncrono para documentos multipáginas no S3.'}
+                {activeTab === 'pdf' && 'Pipeline assíncrona em estágios (ingest → ocr → nlp).'}
               </p>
 
               {/* Formulário Comprehend */}
@@ -403,7 +485,7 @@ export default function App() {
                   </div>
 
                   <div className="flex justify-end mb-6">
-                    <Button loading={loading && !jobId} disabled={!s3Key.trim()} text="Iniciar Job Assíncrono" />
+                    <Button loading={loading && !jobId} disabled={!s3Key.trim()} text="Criar Job na Pipeline" />
                   </div>
 
                   {jobId && (
@@ -411,6 +493,9 @@ export default function App() {
                       <h3 className="text-xs font-bold text-orange-800 uppercase tracking-wider mb-2">Controle do Job</h3>
                       <p className="text-xs font-mono text-slate-600 mb-3 break-all bg-white p-1 rounded border border-orange-100">
                         ID: {jobId}
+                      </p>
+                      <p className="text-xs text-slate-700 mb-3">
+                        Stage: <span className="font-mono">{jobStage || 'ingest'}</span> | Progress: <span className="font-mono">{jobProgress}%</span>
                       </p>
                       
                       <div className="flex gap-2">
@@ -420,7 +505,7 @@ export default function App() {
                             onClick={startPolling}
                             className="flex-1 bg-orange-600 text-white text-xs font-bold py-2 rounded hover:bg-orange-700 transition-colors"
                           >
-                            Iniciar Polling (3s)
+                            Iniciar Polling (Backoff)
                           </button>
                         ) : (
                           <button 
