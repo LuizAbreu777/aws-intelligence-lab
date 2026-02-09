@@ -1,5 +1,6 @@
-# Node
+# Node (global)
 node_modules/
+**/node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -17,4 +18,6 @@ yarn-error.log*
 # Build
 dist/
 build/
+
+# arquivos locais do projeto
 s3arq/
