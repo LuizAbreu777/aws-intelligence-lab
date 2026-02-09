@@ -30,6 +30,9 @@ services:
       PORT: 3000
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/aws_db
       RABBITMQ_URL: amqp://rabbitmq:5672
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      MOCK_AWS: ${MOCK_AWS:-false}
+      TEXTRACT_S3_BUCKET: ${TEXTRACT_S3_BUCKET:-}
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -49,6 +52,8 @@ services:
       RABBITMQ_URL: amqp://rabbitmq:5672
       JOB_QUEUE_INGEST: jobs.ingest
       JOB_MAX_RETRIES: 3
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      MOCK_AWS: ${MOCK_AWS:-false}
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -72,7 +77,7 @@ services:
       JOB_MAX_RETRIES: 3
       AWS_REGION: ${AWS_REGION:-us-east-1}
       TEXTRACT_S3_BUCKET: ${TEXTRACT_S3_BUCKET:-}
-      MOCK_AWS: ${MOCK_AWS:-true}
+      MOCK_AWS: ${MOCK_AWS:-false}
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -94,7 +99,7 @@ services:
       JOB_QUEUE_COMPLETED: jobs.completed
       JOB_MAX_RETRIES: 3
       AWS_REGION: ${AWS_REGION:-us-east-1}
-      MOCK_AWS: ${MOCK_AWS:-true}
+      MOCK_AWS: ${MOCK_AWS:-false}
     depends_on:
       rabbitmq:
         condition: service_healthy

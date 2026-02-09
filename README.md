@@ -142,7 +142,7 @@ curl -s http://localhost:3000/jobs/stats
 5. Confira resultado final em `job.result` e progresso `100`.
 6. Confira agregados em `GET /jobs/stats`.
 
-## 7. Operacao e troubleshooting
+## 7. Operação e troubleshooting
 
 - Logs:
 
@@ -171,3 +171,19 @@ docker compose up -d --build
 - Estado centralizado e consultavel em banco.
 - Mecanismos de resiliencia (retry, DLQ, correlation).
 - Escalabilidade horizontal por replicas de workers.
+
+## 9. Recommended Technical Improvements (No Functional Changes)
+
+The items below are optimization and maintainability improvements that do not change business behavior.
+
+1. Fix root `dev` script to run frontend and backend in parallel.
+2. Keep README and runtime defaults aligned (especially `MOCK_AWS` default) to avoid accidental AWS costs.
+3. Avoid infrastructure drift by keeping a single source of truth for Compose files.
+4. Extract queue and DLQ names to one shared contract module (API and workers currently duplicate values).
+5. Add graceful shutdown hooks (`SIGINT`/`SIGTERM`) to close Postgres pools and AMQP channels cleanly.
+6. Reuse singleton AWS SDK clients instead of creating clients per request in backend routes.
+7. Improve health strategy by separating liveness/readiness and including broker readiness checks.
+8. Add centralized startup configuration validation (required env vars, mode constraints, bucket checks).
+9. Refactor large frontend file into smaller components/hooks for easier maintenance.
+10. Harmonize dependency versions across backend/worker (AWS SDK and `pg`) to reduce environment variance.
+11. Add automated smoke/integration tests for the staged job pipeline (`POST /jobs` -> `GET /jobs/:id`).

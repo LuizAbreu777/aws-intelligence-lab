@@ -51,6 +51,7 @@ async function processOcr(job) {
   const payload = job?.payload || {};
   const s3Key = payload?.s3Key || job?.meta?.s3Key;
   const inputText = payload?.text;
+  const useMockAws = typeof payload?.useMockAws === "boolean" ? payload.useMockAws : MOCK_AWS;
 
   if (inputText) {
     return {
@@ -62,7 +63,7 @@ async function processOcr(job) {
 
   if (!s3Key) throw new Error("Payload sem 'text' ou 's3Key' para OCR.");
 
-  if (MOCK_AWS) {
+  if (useMockAws) {
     return {
       text: `MOCK OCR do arquivo ${s3Key}`,
       lineCount: 1,

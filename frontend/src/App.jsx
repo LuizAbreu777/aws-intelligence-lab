@@ -57,6 +57,15 @@ export default function App() {
   const [healthStatus, setHealthStatus] = useState(null); 
   const [awsHealth, setAwsHealth] = useState(null); // Novo: Status da AWS
   const [awsCooldownLeft, setAwsCooldownLeft] = useState(0);
+  const [useMockAws, setUseMockAws] = useState(() => {
+    try {
+      const saved = localStorage.getItem('useMockAws');
+      if (saved == null) return true;
+      return saved === 'true';
+    } catch (e) {
+      return true;
+    }
+  });
   const awsLastCheckAtRef = useRef(0);
   const awsCooldownTimerRef = useRef(null);
 
@@ -100,6 +109,14 @@ export default function App() {
   useEffect(() => {
     checkHealth();
   }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('useMockAws', String(useMockAws));
+    } catch (e) {
+      // ignore
+    }
+  }, [useMockAws]);
 
   // Função para testar conectividade AWS (Novo)
   const checkAwsConnectivity = async () => {
@@ -146,6 +163,8 @@ export default function App() {
     try {
       const headers = {};
       let finalBody = body;
+
+      headers['x-use-mock-aws'] = String(useMockAws);
 
       if (!isFileUpload && method !== 'GET') {
         headers['Content-Type'] = 'application/json';
@@ -216,7 +235,7 @@ export default function App() {
     try {
       const data = await callApi('/jobs', 'POST', {
         type: activeTab === 'pdf' ? 'pdf' : 'text',
-        payload: { s3Key, languageCode: language }
+        payload: { s3Key, languageCode: language, useMockAws }
       });
       if (data.jobId) {
         setJobId(data.jobId);
@@ -341,6 +360,19 @@ export default function App() {
               {awsCooldownLeft > 0 && awsHealth !== 'CHECKING' && (
                 <span className="hidden sm:inline">({awsCooldownLeft}s)</span>
               )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setUseMockAws((prev) => !prev)}
+              className={`flex items-center gap-2 text-xs font-mono px-3 py-1.5 rounded-full border transition-colors
+                ${useMockAws
+                  ? 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100'
+                  : 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'}`}
+              title="Alternar entre modo MOCK e AWS real"
+            >
+              <span className="hidden sm:inline">MODE:</span>
+              <span>{useMockAws ? 'MOCK' : 'AWS REAL'}</span>
             </button>
           </div>
         </div>

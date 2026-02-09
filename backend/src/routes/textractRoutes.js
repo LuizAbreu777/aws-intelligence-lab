@@ -9,6 +9,7 @@ import {
 import { getTextractClient } from "../aws/textractClient.js";
 import { mockAnalyze, mockOcr, mockPdfStart, mockPdfStatus } from "../mocks/awsMocks.js";
 import { uploadImage } from "../utils/fileUpload.js";
+import { shouldUseMockAws } from "../utils/mockAws.js";
 import { requireS3Key } from "../utils/validate.js";
 
 export const textractRoutes = express.Router();
@@ -19,7 +20,7 @@ textractRoutes.post("/ocr", uploadImage.single("file"), async (req, res, next) =
       return res.status(400).json({ ok: false, error: "Arquivo 'file' é obrigatório (JPG/PNG)." });
     }
 
-    if (process.env.MOCK_AWS === "true") {
+    if (shouldUseMockAws(req)) {
       return res.json(mockOcr());
     }
 
@@ -50,7 +51,7 @@ textractRoutes.post("/analyze", uploadImage.single("file"), async (req, res, nex
       return res.status(400).json({ ok: false, error: "Arquivo 'file' é obrigatório (JPG/PNG)." });
     }
 
-    if (process.env.MOCK_AWS === "true") {
+    if (shouldUseMockAws(req)) {
       return res.json(mockAnalyze());
     }
 
@@ -79,7 +80,7 @@ textractRoutes.post("/pdf/start", async (req, res, next) => {
     const { s3Key } = req.body;
     requireS3Key(s3Key);
 
-    if (process.env.MOCK_AWS === "true") {
+    if (shouldUseMockAws(req)) {
       return res.json(mockPdfStart());
     }
 
@@ -106,7 +107,7 @@ textractRoutes.get("/pdf/status/:jobId", async (req, res, next) => {
   try {
     const { jobId } = req.params;
 
-    if (process.env.MOCK_AWS === "true") {
+    if (shouldUseMockAws(req)) {
       return res.json(mockPdfStatus(jobId));
     }
 

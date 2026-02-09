@@ -28,8 +28,8 @@ function normalizeLanguageCode(lang) {
   return "en";
 }
 
-async function runNlp(text, languageCode) {
-  if (MOCK_AWS) {
+async function runNlp(text, languageCode, useMockAws) {
+  if (useMockAws) {
     return {
       sentiment: { Sentiment: "NEUTRAL", SentimentScore: { Positive: 0.1, Negative: 0.1, Neutral: 0.8, Mixed: 0 } },
       entities: [{ Type: "OTHER", Text: "MOCK", Score: 0.99 }]
@@ -78,9 +78,10 @@ async function main() {
 
         const languageCode = normalizeLanguageCode(job?.meta?.languageCode || job?.payload?.languageCode);
         const text = job?.result?.ocrText || job?.result?.ocr?.text || job?.payload?.text;
+        const useMockAws = typeof job?.payload?.useMockAws === "boolean" ? job.payload.useMockAws : MOCK_AWS;
         if (!text || !text.trim()) throw new Error("Texto vazio para processamento NLP.");
 
-        const nlp = await runNlp(text, languageCode);
+        const nlp = await runNlp(text, languageCode, useMockAws);
 
         await mergeJobResult(
           jobId,
