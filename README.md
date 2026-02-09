@@ -1,4 +1,4 @@
-# AWS Intelligence Lab - Tier 4 Distributed Pipeline
+# AWS Intelligence Lab - Tier 4 Distributed Pipeline 🚀
 
 Aplicacao distribuida com processamento assíncrono em estagios (`ingest -> ocr -> nlp`) usando:
 
@@ -9,7 +9,66 @@ Aplicacao distribuida com processamento assíncrono em estagios (`ingest -> ocr 
 - PostgreSQL (estado e resultados)
 - Integracao AWS (Textract e Comprehend) com modo mock para desenvolvimento
 
-## 1. Arquitetura
+## Estrutura do Projeto 🗂️
+
+```text
+aws-intelligence-lab/
+├─ backend/
+│  ├─ src/
+│  │  ├─ app.js
+│  │  ├─ server.js
+│  │  ├─ aws/
+│  │  ├─ routes/
+│  │  └─ utils/
+│  ├─ Dockerfile
+│  └─ package.json
+├─ worker/
+│  ├─ src/
+│  │  ├─ common.js
+│  │  ├─ ingestWorker.js
+│  │  ├─ ocrWorker.js
+│  │  └─ nlpWorker.js
+│  ├─ Dockerfile
+│  └─ package.json
+├─ frontend/
+│  ├─ src/
+│  │  └─ App.jsx
+│  └─ package.json
+├─ db/
+│  └─ init.sql
+├─ docker-compose.yml
+├─ docker.compose.yml
+└─ README.md
+```
+
+## Arquitetura do Sistema 🧭
+
+```text
+[Frontend React]
+      |
+      | HTTP (POST /jobs, GET /jobs/:id)
+      v
+[API Gateway - Express]
+      |
+      | AMQP publish (jobs.ingest)
+      v
+[RabbitMQ]
+   |              |               |
+   v              v               v
+[worker-ingest] -> [worker-ocr] -> [worker-nlp]
+        |               |               |
+        |               |               |
+        +-------------> [PostgreSQL] <+
+                     (status/result/progress)
+```
+
+Notas:
+- O frontend nao acessa AWS diretamente.
+- A API orquestra jobs e expoe status.
+- Workers processam por etapa e atualizam o banco.
+- RabbitMQ desacopla processamento e permite escala horizontal.
+
+## 1. Arquitetura 🏗️
 
 ### Servicos
 
@@ -41,7 +100,7 @@ Aplicacao distribuida com processamento assíncrono em estagios (`ingest -> ocr 
 - `result`: saida agregada por etapa (`ocrText`, `ocr`, `nlp`)
 - `error_message`: erro final quando falha
 
-## 2. Confiabilidade e tolerancia a falhas
+## 2. Confiabilidade e tolerancia a falhas 🛡️
 
 - Ack somente em sucesso.
 - Em erro transitório: `nack(requeue=true)` + incremento de `attempt_count`.
@@ -53,7 +112,7 @@ Aplicacao distribuida com processamento assíncrono em estagios (`ingest -> ocr 
   - `jobs.nlp.dlq`
 - Correlacao ponta a ponta com `correlationId=jobId` em logs e mensagens AMQP.
 
-## 3. Escalabilidade
+## 3. Escalabilidade 📈
 
 Escala horizontal por worker (consumer group AMQP):
 
@@ -63,13 +122,86 @@ docker compose up -d --scale worker-ingest=2 --scale worker-ocr=3 --scale worker
 
 RabbitMQ distribui mensagens entre replicas da mesma fila. A API continua stateless para escrita/leitura do estado no Postgres.
 
-## 4. Setup e execucao
+## 4. Setup e execucao ⚙️
 
-## Requisitos
+## Requisitos 📦
 
 - Docker + Docker Compose
 
-## Variaveis principais
+## Quick Start (Beginner Friendly) 👣
+
+Follow these steps exactly, in order.
+
+1. Install Docker Desktop
+- Download and install: https://www.docker.com/products/docker-desktop/
+- Open Docker Desktop and wait until it shows it is running.
+
+2. Open a terminal in the project folder
+- Example project path: `aws-intelligence-lab`
+
+3. Create or update the root `.env` file
+- File location: same folder as `docker-compose.yml`
+- Minimal content:
+
+```env
+AWS_REGION=us-east-1
+MOCK_AWS=false
+TEXTRACT_S3_BUCKET=aws-intelligence-lab-pdf
+```
+
+If you just want to test without spending money, use:
+
+```env
+MOCK_AWS=true
+AWS_REGION=us-east-1
+TEXTRACT_S3_BUCKET=aws-intelligence-lab-pdf
+```
+
+4. Start all services
+
+```bash
+docker compose up -d --build
+```
+
+5. Check if everything is healthy
+
+```bash
+docker compose ps
+```
+
+Expected: `api-gateway`, `rabbitmq`, and workers should be `Up` and eventually `healthy` ✅
+
+6. Open the application
+- Frontend (if running separately): usually `http://localhost:5173`
+- API health: `http://localhost:3000/health`
+
+7. First functional test (API)
+
+```bash
+curl -s -X POST http://localhost:3000/jobs \
+  -H "Content-Type: application/json" \
+  -d '{"type":"text","payload":{"text":"Hello from first run","languageCode":"en"}}'
+```
+
+Copy the returned `jobId`, then check status:
+
+```bash
+curl -s http://localhost:3000/jobs/<JOB_ID>
+```
+
+8. Stop everything when finished
+
+```bash
+docker compose down
+```
+
+If you need a full reset (including database volume):
+
+```bash
+docker compose down -v
+```
+
+## Variaveis principais 🔐
 
 - `MOCK_AWS=true` (default no compose): roda sem chamar AWS real.
 - `MOCK_AWS=false`: habilita AWS real.
@@ -90,7 +222,7 @@ docker compose ps
 curl -s http://localhost:3000/health
 ```
 
-## 5. Endpoints principais
+## 5. Endpoints principais 🌐
 
 - `POST /jobs` cria job da pipeline
 - `GET /jobs/:id` consulta status/progresso/resultado
@@ -131,7 +263,7 @@ curl -s http://localhost:3000/jobs/<JOB_ID>
 curl -s http://localhost:3000/jobs/stats
 ```
 
-## 6. Teste ponta a ponta (checklist)
+## 6. Teste ponta a ponta (checklist) 🧪
 
 1. Suba a stack: `docker compose up -d --build`.
 2. Crie um job com `s3Key` ou `text`.
@@ -142,7 +274,7 @@ curl -s http://localhost:3000/jobs/stats
 5. Confira resultado final em `job.result` e progresso `100`.
 6. Confira agregados em `GET /jobs/stats`.
 
-## 7. Operação e troubleshooting
+## 7. Operação e troubleshooting 🧰
 
 - Logs:
 
@@ -163,7 +295,7 @@ docker compose down -v
 docker compose up -d --build
 ```
 
-## 8. Observacoes de design (Tier 4)
+## 8. Observacoes de design (Tier 4) 🧠
 
 - Sistema distribuido com multiplos servicos independentes.
 - Comunicacao mista HTTP + AMQP.
@@ -172,7 +304,7 @@ docker compose up -d --build
 - Mecanismos de resiliencia (retry, DLQ, correlation).
 - Escalabilidade horizontal por replicas de workers.
 
-## 9. Recommended Technical Improvements (No Functional Changes)
+## 9. Recommended Technical Improvements (No Functional Changes) 📌
 
 The items below are optimization and maintainability improvements that do not change business behavior.
 
