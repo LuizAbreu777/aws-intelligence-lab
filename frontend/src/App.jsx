@@ -3,22 +3,23 @@ import {
   Brain, 
   FileText, 
   ScanText, 
-  Send, 
   Loader2, 
   AlertCircle, 
-  CheckCircle2, 
   Server,
   Activity,
   Files,
   Image as ImageIcon,
   CloudLightning // Ícone novo para AWS
 } from 'lucide-react';
+import TabButton from "./components/TabButton";
+import SubmitButton from "./components/SubmitButton";
+import { useApi } from "./hooks/useApi";
 
 // Função utilitária para obter a URL base com segurança
 const getBaseUrl = () => {
   try {
     return import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
-  } catch (e) {
+  } catch {
     return 'http://localhost:3000';
   }
 };
@@ -49,11 +50,9 @@ export default function App() {
   const pollStartAtRef = useRef(null);
   const pollAttemptRef = useRef(0);
   const pollRequestInFlightRef = useRef(false);
+  const filePreviewRef = useRef(null);
 
   // Estados de Requisição
-  const [loading, setLoading] = useState(false);
-  const [response, setResponse] = useState(null);
-  const [error, setError] = useState(null);
   const [healthStatus, setHealthStatus] = useState(null); 
   const [awsHealth, setAwsHealth] = useState(null); // Novo: Status da AWS
   const [awsCooldownLeft, setAwsCooldownLeft] = useState(0);
@@ -62,19 +61,23 @@ export default function App() {
       const saved = localStorage.getItem('useMockAws');
       if (saved == null) return true;
       return saved === 'true';
-    } catch (e) {
+    } catch {
       return true;
     }
   });
   const awsLastCheckAtRef = useRef(0);
   const awsCooldownTimerRef = useRef(null);
+  const { loading, response, error, setError, setResponse, request } = useApi(API_BASE_URL, useMockAws);
+  useEffect(() => {
+    filePreviewRef.current = filePreview;
+  }, [filePreview]);
 
   // Limpeza de recursos
   useEffect(() => {
     return () => {
       if (pollInterval.current) clearTimeout(pollInterval.current);
       if (awsCooldownTimerRef.current) clearInterval(awsCooldownTimerRef.current);
-      if (filePreview) URL.revokeObjectURL(filePreview);
+      if (filePreviewRef.current) URL.revokeObjectURL(filePreviewRef.current);
     };
   }, []);
 
@@ -100,7 +103,7 @@ export default function App() {
     try {
       const res = await fetch(`${API_BASE_URL}/health`);
       setHealthStatus(res.ok ? 'ONLINE' : 'ERROR');
-    } catch (e) {
+    } catch {
       setHealthStatus('OFFLINE');
     }
   };
@@ -113,12 +116,12 @@ export default function App() {
   useEffect(() => {
     try {
       localStorage.setItem('useMockAws', String(useMockAws));
-    } catch (e) {
+    } catch {
       // ignore
     }
   }, [useMockAws]);
 
-  // Função para testar conectividade AWS (Novo)
+  // Funcao para testar conectividade AWS (sempre em modo real)
   const checkAwsConnectivity = async () => {
     const now = Date.now();
     const elapsed = now - awsLastCheckAtRef.current;
@@ -142,66 +145,35 @@ export default function App() {
     }, 1000);
 
     setAwsHealth('CHECKING');
-    // Usamos uma chamada leve ao Comprehend para validar credenciais
     try {
-      await callApi('/comprehend/sentiment', 'POST', { 
-        text: 'AWS Connectivity Check', 
-        languageCode: 'en' 
+      await request('/comprehend/sentiment', {
+        method: 'POST',
+        body: {
+          text: 'AWS Connectivity Check',
+          languageCode: 'en'
+        },
+        useMockAwsOverride: false,
+        updateUi: false
       });
       setAwsHealth('OK');
     } catch (e) {
       setAwsHealth('ERROR');
-      // O erro detalhado já será setado pelo callApi e mostrado no terminal
-    }
-  };
-
-  const callApi = async (endpoint, method = 'POST', body = null, isFileUpload = false) => {
-    setLoading(true);
-    setResponse(null);
-    setError(null);
-
-    try {
-      const headers = {};
-      let finalBody = body;
-
-      headers['x-use-mock-aws'] = String(useMockAws);
-
-      if (!isFileUpload && method !== 'GET') {
-        headers['Content-Type'] = 'application/json';
-        finalBody = JSON.stringify(body);
-      }
-
-      const res = await fetch(`${API_BASE_URL}${endpoint}`, {
-        method,
-        headers: isFileUpload ? {} : headers,
-        body: finalBody,
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.message || data.error || 'Erro ao comunicar com o servidor');
-      }
-
-      setResponse(data);
-      return data;
-    } catch (err) {
-      console.error(err);
-      setError(err.message || 'Falha na conexão com o Backend');
-      throw err;
-    } finally {
-      setLoading(false);
+      setError(e?.message || 'Falha na validacao de credenciais AWS');
     }
   };
 
   // --- HANDLERS DE AÇÃO ---
 
-  const handleComprehend = (e) => {
+  const handleComprehend = async (e) => {
     e.preventDefault();
     if (!inputText.trim()) return;
     
     const endpoint = activeTab === 'sentiment' ? '/comprehend/sentiment' : '/comprehend/entities';
-    callApi(endpoint, 'POST', { text: inputText, languageCode: language });
+    try {
+      await request(endpoint, { method: 'POST', body: { text: inputText, languageCode: language } });
+    } catch {
+      // Erro ja tratado no hook
+    }
   };
 
   const insertExample = () => {
@@ -211,20 +183,29 @@ export default function App() {
   const handleFileSelect = (e) => {
     const file = e.target.files[0];
     if (file) {
+      if (filePreviewRef.current) URL.revokeObjectURL(filePreviewRef.current);
       setSelectedFile(file);
       setFilePreview(URL.createObjectURL(file));
       setResponse(null);
     }
   };
 
-  const handleTextractUpload = (e) => {
+  const handleTextractUpload = async (e) => {
     e.preventDefault();
     if (!selectedFile) return;
 
     const formData = new FormData();
     formData.append('file', selectedFile);
 
-    callApi('/textract/analyze', 'POST', formData, true);
+    try {
+      await request('/textract/analyze', {
+        method: 'POST',
+        body: formData,
+        isFileUpload: true
+      });
+    } catch {
+      // Erro ja tratado no hook
+    }
   };
 
   // --- LÓGICA DE PDF ASSÍNCRONO ---
@@ -233,22 +214,26 @@ export default function App() {
     e.preventDefault();
     stopPolling();
     try {
-      const data = await callApi('/jobs', 'POST', {
-        type: activeTab === 'pdf' ? 'pdf' : 'text',
-        payload: { s3Key, languageCode: language, useMockAws }
+      const data = await request('/jobs', {
+        method: 'POST',
+        body: {
+          type: activeTab === 'pdf' ? 'pdf' : 'text',
+          payload: { s3Key, languageCode: language, useMockAws }
+        }
       });
       if (data.jobId) {
         setJobId(data.jobId);
         setJobStage(data.stage || 'ingest');
         setJobProgress(data.progress || 0);
+        startPolling(data.jobId);
       }
-    } catch (e) {
-      // Erro já tratado no callApi
+    } catch {
+      // Erro ja tratado no hook
     }
   };
 
-  const checkPdfStatus = async () => {
-    if (!jobId) return;
+  const checkPdfStatus = async ({ silent = false, targetJobId = jobId } = {}) => {
+    if (!targetJobId) return;
     if (pollRequestInFlightRef.current) return;
 
     if (
@@ -263,7 +248,10 @@ export default function App() {
 
     pollRequestInFlightRef.current = true;
     try {
-      const data = await callApi(`/jobs/${jobId}`, 'GET');
+      const data = await request(`/jobs/${targetJobId}`, {
+        method: 'GET',
+        updateUi: !silent
+      });
       const job = data?.job;
       if (!job) throw new Error('Job não encontrado');
 
@@ -271,6 +259,7 @@ export default function App() {
       setJobProgress(Number(job.progress || 0));
 
       if (job.status === 'done' || job.status === 'failed') {
+        if (silent) setResponse(data);
         stopPolling();
         return;
       }
@@ -279,23 +268,24 @@ export default function App() {
         const idx = Math.min(pollAttemptRef.current, POLL_BACKOFF_MS.length - 1);
         const delay = POLL_BACKOFF_MS[idx];
         pollAttemptRef.current += 1;
-        pollInterval.current = setTimeout(checkPdfStatus, delay);
+        pollInterval.current = setTimeout(() => checkPdfStatus({ silent: true, targetJobId }), delay);
       }
     } catch (e) {
+      if (silent) setError(e?.message || 'Falha ao consultar o status do job');
       stopPolling();
     } finally {
       pollRequestInFlightRef.current = false;
     }
   };
 
-  const startPolling = () => {
-    if (!jobId || isPollingRef.current) return;
+  const startPolling = (targetJobId = jobId) => {
+    if (!targetJobId || isPollingRef.current) return;
     if (pollInterval.current) clearTimeout(pollInterval.current);
     pollAttemptRef.current = 0;
     pollStartAtRef.current = Date.now();
     isPollingRef.current = true;
     setIsPolling(true);
-    checkPdfStatus();
+    checkPdfStatus({ silent: true, targetJobId });
   };
 
   const stopPolling = () => {
@@ -460,7 +450,7 @@ export default function App() {
                     >
                       Inserir Exemplo
                     </button>
-                    <Button loading={loading} disabled={!inputText.trim()} />
+                    <SubmitButton loading={loading} disabled={!inputText.trim()} />
                   </div>
                 </form>
               )}
@@ -495,7 +485,7 @@ export default function App() {
                   )}
                   
                   <div className="flex justify-end">
-                    <Button loading={loading} disabled={!selectedFile} text="Extrair Texto" />
+                    <SubmitButton loading={loading} disabled={!selectedFile} text="Extrair Texto" />
                   </div>
                 </form>
               )}
@@ -517,7 +507,7 @@ export default function App() {
                   </div>
 
                   <div className="flex justify-end mb-6">
-                    <Button loading={loading && !jobId} disabled={!s3Key.trim()} text="Criar Job na Pipeline" />
+                    <SubmitButton loading={loading && !jobId} disabled={!s3Key.trim()} text="Criar Job na Pipeline" />
                   </div>
 
                   {jobId && (
@@ -529,6 +519,9 @@ export default function App() {
                       <p className="text-xs text-slate-700 mb-3">
                         Stage: <span className="font-mono">{jobStage || 'ingest'}</span> | Progress: <span className="font-mono">{jobProgress}%</span>
                       </p>
+                      <p className="text-[11px] text-slate-600 mb-3">
+                        Polling automatico inicia apos criar o job.
+                      </p>
                       
                       <div className="flex gap-2">
                         {!isPolling ? (
@@ -537,7 +530,7 @@ export default function App() {
                             onClick={startPolling}
                             className="flex-1 bg-orange-600 text-white text-xs font-bold py-2 rounded hover:bg-orange-700 transition-colors"
                           >
-                            Iniciar Polling (Backoff)
+                            Retomar Polling
                           </button>
                         ) : (
                           <button 
@@ -637,58 +630,5 @@ export default function App() {
         </div>
       </main>
     </div>
-  );
-}
-
-// --- COMPONENTES AUXILIARES ---
-
-function TabButton({ active, onClick, icon, title, desc }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`
-        flex flex-col items-center sm:items-start p-3 rounded-xl border transition-all duration-200 text-center sm:text-left h-full
-        ${active 
-          ? 'bg-white border-orange-500 ring-1 ring-orange-500 shadow-md transform -translate-y-0.5' 
-          : 'bg-white border-slate-200 hover:border-orange-300 hover:bg-orange-50 text-slate-500'
-        }
-      `}
-    >
-      <div className={`mb-1.5 ${active ? 'text-orange-600' : 'text-slate-400'}`}>
-        {icon}
-      </div>
-      <span className={`font-bold text-xs sm:text-sm block w-full ${active ? 'text-slate-900' : 'text-slate-600'}`}>
-        {title}
-      </span>
-      <span className="text-[10px] hidden sm:block mt-0.5 opacity-80">{desc}</span>
-    </button>
-  );
-}
-
-function Button({ loading, disabled, text = "Analisar" }) {
-  return (
-    <button
-      type="submit"
-      disabled={disabled || loading}
-      className={`
-        flex items-center gap-2 px-5 py-2.5 rounded-lg font-bold text-xs uppercase tracking-wide transition-all
-        ${disabled 
-          ? 'bg-slate-100 text-slate-400 cursor-not-allowed' 
-          : 'bg-orange-600 hover:bg-orange-700 text-white shadow-md hover:shadow-lg active:scale-95'
-        }
-      `}
-    >
-      {loading ? (
-        <>
-          <Loader2 size={14} className="animate-spin" />
-          Processando...
-        </>
-      ) : (
-        <>
-          <Send size={14} />
-          {text}
-        </>
-      )}
-    </button>
   );
 }
