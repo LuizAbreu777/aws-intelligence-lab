@@ -31,6 +31,9 @@ services:
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/aws_db
       RABBITMQ_URL: amqp://rabbitmq:5672
       AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
       MOCK_AWS: ${MOCK_AWS:-false}
       TEXTRACT_S3_BUCKET: ${TEXTRACT_S3_BUCKET:-}
     depends_on:
@@ -53,6 +56,9 @@ services:
       JOB_QUEUE_INGEST: jobs.ingest
       JOB_MAX_RETRIES: 3
       AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
       MOCK_AWS: ${MOCK_AWS:-false}
     depends_on:
       rabbitmq:
@@ -76,6 +82,9 @@ services:
       JOB_QUEUE_COMPLETED: jobs.completed
       JOB_MAX_RETRIES: 3
       AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
       TEXTRACT_S3_BUCKET: ${TEXTRACT_S3_BUCKET:-}
       MOCK_AWS: ${MOCK_AWS:-false}
     depends_on:
@@ -99,6 +108,9 @@ services:
       JOB_QUEUE_COMPLETED: jobs.completed
       JOB_MAX_RETRIES: 3
       AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
       MOCK_AWS: ${MOCK_AWS:-false}
     depends_on:
       rabbitmq:
