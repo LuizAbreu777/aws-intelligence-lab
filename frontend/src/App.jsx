@@ -40,7 +40,7 @@ export default function App() {
   const [filePreview, setFilePreview] = useState(null); 
   
   // Estados para PDF Assíncrono
-  const [s3Key, setS3Key] = useState('docs/exemplo.pdf');
+  const [s3Key, setS3Key] = useState('docs/teste de usabilidade .pdf');
   const [jobId, setJobId] = useState('');
   const [jobStage, setJobStage] = useState('');
   const [jobProgress, setJobProgress] = useState(0);
@@ -177,7 +177,12 @@ export default function App() {
   };
 
   const insertExample = () => {
-    setInputText("O atendimento na loja foi excelente e os produtos são de alta qualidade, porém a entrega demorou um pouco.");
+    if (activeTab === 'entities') {
+      setInputText('Amazon no Brasil abriu um novo centro de distribuicao.');
+      return;
+    }
+
+    setInputText('O atendimento foi excelente, a entrega chegou antes do prazo e o produto tem otima qualidade.');
   };
 
   const handleFileSelect = (e) => {

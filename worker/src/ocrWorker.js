@@ -18,6 +18,7 @@ import {
   sleep,
   updateJob
 } from "./common.js";
+import { buildUsabilityOcrMock, isUsabilityPdfMock } from "./mocks/pdfAsyncMocks.js";
 
 const region = process.env.AWS_REGION || "us-east-1";
 const textractBucket = process.env.TEXTRACT_S3_BUCKET;
@@ -64,6 +65,10 @@ async function processOcr(job) {
   if (!s3Key) throw new Error("Payload sem 'text' ou 's3Key' para OCR.");
 
   if (useMockAws) {
+    if (isUsabilityPdfMock(s3Key)) {
+      return buildUsabilityOcrMock();
+    }
+
     return {
       text: `MOCK OCR do arquivo ${s3Key}`,
       lineCount: 1,

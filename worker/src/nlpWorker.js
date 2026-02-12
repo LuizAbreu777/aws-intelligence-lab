@@ -17,6 +17,7 @@ import {
   parseMessage,
   updateJob
 } from "./common.js";
+import { buildUsabilityNlpMock, isUsabilityOcrText } from "./mocks/pdfAsyncMocks.js";
 
 const region = process.env.AWS_REGION || "us-east-1";
 const comprehendClient = new ComprehendClient({ region });
@@ -30,6 +31,10 @@ function normalizeLanguageCode(lang) {
 
 async function runNlp(text, languageCode, useMockAws) {
   if (useMockAws) {
+    if (isUsabilityOcrText(text)) {
+      return buildUsabilityNlpMock();
+    }
+
     return {
       sentiment: { Sentiment: "NEUTRAL", SentimentScore: { Positive: 0.1, Negative: 0.1, Neutral: 0.8, Mixed: 0 } },
       entities: [{ Type: "OTHER", Text: "MOCK", Score: 0.99 }]

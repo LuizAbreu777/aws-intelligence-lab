@@ -25,7 +25,7 @@ services:
   api-gateway:
     build: ./backend
     ports:
-      - "3000:3000"
+      - "${API_GATEWAY_PORT:-3000}:3000"
     environment:
       PORT: 3000
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/aws_db
